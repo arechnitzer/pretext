@@ -173,6 +173,12 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- provides an error message and also sets a value -->
 <!-- we can condition on for the extsizes package.   -->
 <!-- In predicted order, sort of, so fall out early  -->
+
+<!-- NB: Code using $font-size and latex.geometry is also -->
+<!-- used in the latex-image extraction stylesheet. Until -->
+<!-- we do a better job of ensuring they remain in-sync,  -->
+<!-- please coordinate the two sets of templates by hand  -->
+
 <xsl:variable name="font-size">
     <xsl:choose>
         <xsl:when test="$latex.font.size='10pt'"><xsl:value-of select="$latex.font.size" /></xsl:when>
@@ -1134,7 +1140,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:text>\usepackage{caption}</xsl:text>
         <!-- First, captioned items subsidiary to a captioned figure -->
         <!-- Seem to be bold face without extra effort               -->
-        <xsl:if test="$document-root//figure/sidebyside/*[caption]">
+        <xsl:if test="$document-root//figure/sidebyside/*[caption] | $document-root//figure/sbsgroup/sidebyside/*[caption]">
             <xsl:text>%% Captioned items inside side-by-side within captioned figure&#xa;</xsl:text>
             <xsl:text>\usepackage{subcaption}&#xa;</xsl:text>
             <xsl:text>\captionsetup[subfigure]{labelformat=simple}&#xa;</xsl:text>
@@ -3466,11 +3472,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- See http://tex.stackexchange.com/questions/99495             -->
 <!-- LaTeX3e with the xparse package might make this unnecessary  -->
 
-<xsl:template match="part|chapter|section|subsection|subsubsection|exercises[count(parent::*/exercises) > 1]|worksheet[count(parent::*/worksheet) > 1]" mode="latex-division-heading">
-    <xsl:if test="self::worksheet">
-        <!-- \newgeometry includes a \clearpage -->
-        <xsl:apply-templates select="." mode="new-geometry"/>
-    </xsl:if>
+<xsl:template match="part|chapter|section|subsection|subsubsection" mode="latex-division-heading">
     <xsl:text>\</xsl:text>
     <xsl:apply-templates select="." mode="division-name" />
     <xsl:text>[{</xsl:text>
@@ -3506,19 +3508,37 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <xsl:text>&#xa;</xsl:text>
 </xsl:template>
 
-<!-- Following elements never have their number displayed at birth -->
-<!-- since they are unique either (a) within the document (as part -->
-<!-- of the back matter), or (b) within some division (chapter,    -->
-<!-- section,...).  So we use a *-form and manually create a ToC   -->
-<!-- entry with a "simple" title at the right level.               -->
-<xsl:template match="solutions|references|exercises[count(parent::*/exercises) = 1]|worksheet[count(parent::*/worksheet) = 1]" mode="latex-division-heading">
+<!-- Specialized divisions are numbered just like         -->
+<!-- other divisions, if within a division structured     -->
+<!-- by subdivisons.  Otherwise they are limited by the   -->
+<!-- schema to one per division and when referenced their -->
+<!-- number will be that of the containing division.      -->
+<xsl:template match="exercises|solutions[not(parent::backmatter)]|references|worksheet" mode="latex-division-heading">
     <xsl:if test="self::worksheet">
         <!-- \newgeometry includes a \clearpage -->
         <xsl:apply-templates select="." mode="new-geometry"/>
     </xsl:if>
+    <!-- Inspect parent (part through subsubsection)  -->
+    <!-- to determine one of two models of a division -->
+    <!-- NB: return values are 'true' and empty       -->
+    <xsl:variable name="is-structured">
+        <xsl:apply-templates select="parent::*" mode="is-structured-division"/>
+    </xsl:variable>
+    <xsl:variable name="b-is-structured" select="$is-structured = 'true'"/>
     <xsl:text>\</xsl:text>
     <xsl:apply-templates select="." mode="division-name" />
-    <xsl:text>*</xsl:text>
+    <!-- optional simple title if numbered, or -->
+    <!-- starred form if not visually numbered -->
+    <xsl:choose>
+        <xsl:when test="$b-is-structured">
+            <xsl:text>[{</xsl:text>
+            <xsl:apply-templates select="." mode="title-simple"/>
+            <xsl:text>}]</xsl:text>
+        </xsl:when>
+        <xsl:otherwise>
+            <xsl:text>*</xsl:text>
+        </xsl:otherwise>
+    </xsl:choose>
     <xsl:text>{</xsl:text>
     <xsl:apply-templates select="." mode="title-full"/>
     <xsl:text>}</xsl:text>
@@ -3527,14 +3547,13 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <!-- We add a ToC entry for the starred versions. These may be    -->
     <!-- generated for divisions that are below the ToC display       -->
     <!-- level, but they do not render as the ToC level prevails      -->
-    <!-- NB: an optional short title on a starred form caused a LaTeX -->
-    <!-- compilation that rendered poorly, which we never figured     -->
-    <!-- out, so we just avoid that combination (2018-04-12)          -->
-    <xsl:text>\addcontentsline{toc}{</xsl:text>
-    <xsl:apply-templates select="." mode="division-name" />
-    <xsl:text>}{</xsl:text>
-    <xsl:apply-templates select="." mode="title-simple" />
-    <xsl:text>}&#xa;</xsl:text>
+    <xsl:if test="not($b-is-structured)">
+        <xsl:text>\addcontentsline{toc}{</xsl:text>
+        <xsl:apply-templates select="." mode="division-name" />
+        <xsl:text>}{</xsl:text>
+        <xsl:apply-templates select="." mode="title-simple" />
+        <xsl:text>}&#xa;</xsl:text>
+    </xsl:if>
 </xsl:template>
 
 <!-- Exceptional, for a worksheet only, we clear the page  -->
@@ -3672,7 +3691,6 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 </xsl:template>
 
 <xsl:template match="exercisegroup/introduction">
-    <xsl:text>\par\noindent </xsl:text>
     <xsl:apply-templates select="*" />
 </xsl:template>
 
@@ -4536,18 +4554,14 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- Commentary goes in an introduction and/or conclusion   -->
 <!-- When we point to these, we use custom hypertarget, etc -->
 <xsl:template match="exercisegroup">
+    <xsl:text>\par\medskip\noindent%&#xa;</xsl:text>
     <xsl:if test="title">
-        <xsl:text>\subparagraph</xsl:text>
-        <!-- keep optional title if LaTeX source is re-purposed -->
-        <xsl:text>[{</xsl:text>
-        <xsl:apply-templates select="." mode="title-simple" />
-        <xsl:text>}]</xsl:text>
-        <xsl:text>{</xsl:text>
+        <xsl:text>\textbf{</xsl:text>
         <xsl:apply-templates select="." mode="title-full" />
-        <xsl:text>}</xsl:text>
+        <xsl:text>}\space\space</xsl:text>
     </xsl:if>
     <xsl:apply-templates select="." mode="label" />
-    <xsl:text>&#xa;</xsl:text>
+    <xsl:text>%&#xa;</xsl:text>
     <xsl:apply-templates select="introduction" />
     <xsl:text>\begin{exercisegroup}{</xsl:text>
     <xsl:choose>
@@ -4568,8 +4582,10 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:with-param name="b-has-solution" select="$b-has-divisional-solution" />
         </xsl:apply-templates>
     <xsl:text>\end{exercisegroup}&#xa;</xsl:text>
-    <xsl:text>\par\noindent%&#xa;</xsl:text>
-    <xsl:apply-templates select="conclusion" />
+    <xsl:if test="conclusion">
+        <xsl:text>\par\noindent%&#xa;</xsl:text>
+        <xsl:apply-templates select="conclusion" />
+    </xsl:if>
     <xsl:text>\par\medskip\noindent&#xa;</xsl:text>
 </xsl:template>
 
@@ -5840,9 +5856,8 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 
 <!-- Natural override for YouTube videos               -->
 <!-- Better - standalone page, with "View on You Tube" -->
-<xsl:template match="video[@youtube]" mode="static-url">
-    <xsl:text>https://www.youtube.com/watch?v=</xsl:text>
-    <xsl:value-of select="@youtube" />
+<xsl:template match="video[@youtube|@youtubeplaylist]" mode="static-url">
+    <xsl:apply-templates select="." mode="youtube-view-url" />
     <xsl:if test="@start">
         <xsl:text>\&amp;start=</xsl:text>
         <xsl:value-of select="@start" />
@@ -5877,6 +5892,10 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             <xsl:text>\includegraphics[width=0.80\linewidth,height=\qrsize,keepaspectratio]{</xsl:text>
             <xsl:value-of select="@preview" />
             <xsl:text>}</xsl:text>
+        </xsl:when>
+        <!-- No good way to scrape image from a playlist, so do as with @preview='generic' for now -->
+        <xsl:when test="@youtubeplaylist">
+            <xsl:text>\resizebox{!}{\qrsize}{\genericpreview}</xsl:text>
         </xsl:when>
         <!-- nothing specified, look for scraped via internal-id -->
         <xsl:otherwise>
@@ -5921,7 +5940,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     </xsl:choose>
 </xsl:template>
 
-<xsl:template match="video[@youtube]" mode="static-caption">
+<xsl:template match="video[@youtube|@youtubeplaylist]" mode="static-caption">
     <xsl:param name="width-scale" />
     <xsl:choose>
         <!-- author-supplied override -->
@@ -5933,8 +5952,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             <xsl:text>YouTube: </xsl:text>
             <xsl:variable name="visual-url">
                 <c>
-                    <xsl:text>www.youtube.com/watch?v=</xsl:text>
-                    <xsl:value-of select="@youtube" />
+                    <xsl:apply-templates select="." mode="youtube-view-url" />
                 </c>
             </xsl:variable>
             <xsl:apply-templates select="exsl:node-set($visual-url)" />
@@ -5942,8 +5960,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:when test="$width-scale &gt; 0.4499">
             <xsl:variable name="visual-url">
                 <c>
-                    <xsl:text>www.youtube.com/watch?v=</xsl:text>
-                    <xsl:value-of select="@youtube" />
+                    <xsl:apply-templates select="." mode="youtube-view-url" />
                 </c>
             </xsl:variable>
             <xsl:apply-templates select="exsl:node-set($visual-url)" />
@@ -5952,10 +5969,38 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             <xsl:text>YT: </xsl:text>
             <xsl:variable name="visual-url">
                 <c>
-                    <xsl:value-of select="@youtube" />
+                    <xsl:value-of select="@youtube|@youtubeplaylist" />
                 </c>
             </xsl:variable>
             <xsl:apply-templates select="exsl:node-set($visual-url)" />
+        </xsl:otherwise>
+    </xsl:choose>
+</xsl:template>
+
+<xsl:template match="video[@youtube|@youtubeplaylist]" mode="youtube-view-url">
+    <xsl:variable name="youtube">
+        <xsl:choose>
+            <xsl:when test="@youtubeplaylist">
+                <xsl:value-of select="normalize-space(@youtubeplaylist)"/>
+            </xsl:when>
+            <xsl:otherwise>
+                <xsl:value-of select="normalize-space(str:replace(@youtube, ',', ' '))" />
+            </xsl:otherwise>
+        </xsl:choose>
+    </xsl:variable>
+    <xsl:text>https://www.youtube.com/</xsl:text>
+    <xsl:choose>
+        <xsl:when test="@youtubeplaylist">
+            <xsl:text>playlist?list=</xsl:text>
+            <xsl:value-of select="$youtube" />
+        </xsl:when>
+        <xsl:when test="contains($youtube, ' ')">
+            <xsl:text>watch_videos?video_ids=</xsl:text>
+            <xsl:value-of select="str:replace($youtube, ' ', ',')" />
+        </xsl:when>
+        <xsl:otherwise>
+            <xsl:text>watch?v=</xsl:text>
+            <xsl:value-of select="$youtube" />
         </xsl:otherwise>
     </xsl:choose>
 </xsl:template>
@@ -5984,53 +6029,41 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <xsl:text>}} not yet realized in \LaTeX]&#xa;</xsl:text>
 </xsl:template>
 
-<!-- Numbers, units, quantities                     -->
-<!-- quantity                                       -->
+<!-- ######## -->
+<!-- SI Units -->
+<!-- ######## -->
+
 <xsl:template match="quantity">
-    <!-- warning if there is no content -->
-    <xsl:if test="not(descendant::unit) and not(descendant::per) and not(descendant::mag)">
-        <xsl:message terminate="no">
-        <xsl:text>MBX:WARNING: magnitude or units needed</xsl:text>
-        </xsl:message>
-    </xsl:if>
-    <!-- if it's just a number with no units -->
-    <xsl:if test="not(descendant::unit) and not(descendant::per) and (descendant::mag)">
-        <xsl:text>\num{</xsl:text>
-        <xsl:apply-templates select="mag"/>
-        <xsl:text>}</xsl:text>
-    </xsl:if>
-    <!-- if it has a magnitude and units -->
-    <xsl:if test="((descendant::unit) or (descendant::per)) and descendant::mag">
-        <xsl:text>\SI{</xsl:text>
-        <xsl:apply-templates select="mag"/>
-        <xsl:text>}{</xsl:text>
-        <xsl:apply-templates select="unit"/>
-        <xsl:apply-templates select="per"/>
-        <xsl:text>}</xsl:text>
-    </xsl:if>
-    <!-- if it is just units with no magnitude -->
-    <xsl:if test="((descendant::unit) or (descendant::per)) and not(descendant::mag)">
-        <xsl:text>\si{</xsl:text>
-        <xsl:apply-templates select="unit"/>
-        <xsl:apply-templates select="per"/>
-        <xsl:text>}</xsl:text>
-    </xsl:if>
+    <xsl:choose>
+        <!-- no magnitude, only units -->
+        <xsl:when test="not(mag) and (unit or per)">
+            <xsl:text>\si{</xsl:text>
+            <xsl:apply-templates select="unit"/>
+            <xsl:apply-templates select="per"/>
+            <xsl:text>}</xsl:text>
+        </xsl:when>
+        <!-- magnitude, plus units -->
+        <xsl:when test="mag and (unit or per)">
+            <xsl:text>\SI{</xsl:text>
+            <xsl:value-of select="mag"/>
+            <xsl:text>}{</xsl:text>
+            <xsl:apply-templates select="unit"/>
+            <xsl:apply-templates select="per"/>
+            <xsl:text>}</xsl:text>
+        </xsl:when>
+        <!-- magnitude only -->
+        <xsl:when test="mag">
+            <xsl:text>\num{</xsl:text>
+            <xsl:value-of select="mag"/>
+            <xsl:text>}</xsl:text>
+        </xsl:when>
+        <!-- nothing (really should be caught in schema) -->
+        <!-- but no real harm in just doing nothing      -->
+        <xsl:otherwise />
+    </xsl:choose>
 </xsl:template>
 
-<!-- Magnitude                                      -->
-<xsl:template match="mag">
-    <xsl:if test="not(parent::quantity)">
-        <xsl:message>MBX:WARNING: mag element should have parent quantity element</xsl:message>
-    </xsl:if>
-    <xsl:apply-templates />
-</xsl:template>
-
-<!-- Units                                          -->
 <xsl:template match="unit|per">
-    <xsl:if test="not(parent::quantity)">
-        <xsl:message>MBX:WARNING: unit or per element should have parent quantity element</xsl:message>
-    </xsl:if>
-    <!-- if we're in a 'per' node -->
     <xsl:if test="self::per">
         <xsl:text>\per</xsl:text>
     </xsl:if>
@@ -6039,18 +6072,9 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:text>\</xsl:text>
         <xsl:value-of select="@prefix"/>
     </xsl:if>
-    <!-- base unit is *mandatory* so check to see if it has been provided -->
-    <xsl:choose>
-        <xsl:when test="@base">
-            <xsl:text>\</xsl:text>
-            <xsl:value-of select="@base"/>
-        </xsl:when>
-        <xsl:otherwise>
-            <xsl:message terminate="no">
-                <xsl:text>MBX:WARNING: base unit needed</xsl:text>
-            </xsl:message>
-        </xsl:otherwise>
-    </xsl:choose>
+    <!-- base unit is required -->
+    <xsl:text>\</xsl:text>
+    <xsl:value-of select="@base"/>
     <!-- optional exponent -->
     <xsl:if test="@exp">
         <xsl:text>\tothe{</xsl:text>
@@ -6058,6 +6082,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:text>}</xsl:text>
     </xsl:if>
 </xsl:template>
+
 
 <!-- Actual Quotations                -->
 <!-- TODO: <quote> element for inline -->
@@ -6359,17 +6384,17 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- & < > -->
 
 <!-- Ampersand -->
-<xsl:template match="ampersand">
+<xsl:template name="ampersand-character">
     <xsl:text>\&amp;</xsl:text>
 </xsl:template>
 
 <!-- Less Than -->
-<xsl:template match="less">
+<xsl:template name="less-character">
     <xsl:text>\textless{}</xsl:text>
 </xsl:template>
 
 <!-- Greater Than -->
-<xsl:template match="greater">
+<xsl:template name="greater-character">
     <xsl:text>\textgreater{}</xsl:text>
 </xsl:template>
 
@@ -6380,22 +6405,22 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- # $ % ^ & _ { } ~ \ -->
 
 <!-- Number Sign, Hash, Octothorpe -->
-<xsl:template match="hash">
+<xsl:template name="hash-character">
     <xsl:text>\#</xsl:text>
 </xsl:template>
 
 <!-- Dollar sign -->
-<xsl:template match="dollar">
+<xsl:template name="dollar-character">
     <xsl:text>\textdollar{}</xsl:text>
 </xsl:template>
 
 <!-- Percent sign -->
-<xsl:template match="percent">
+<xsl:template name="percent-character">
     <xsl:text>\%</xsl:text>
 </xsl:template>
 
 <!-- Circumflex  -->
-<xsl:template match="circumflex">
+<xsl:template name="circumflex-character">
     <xsl:text>\textasciicircum{}</xsl:text>
 </xsl:template>
 
@@ -6403,27 +6428,27 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- Handled above -->
 
 <!-- Underscore -->
-<xsl:template match="underscore">
+<xsl:template name="underscore-character">
     <xsl:text>\textunderscore{}</xsl:text>
 </xsl:template>
 
 <!-- Left Brace -->
-<xsl:template match="lbrace">
+<xsl:template name="lbrace-character">
     <xsl:text>\textbraceleft{}</xsl:text>
 </xsl:template>
 
 <!-- Right  Brace -->
-<xsl:template match="rbrace">
+<xsl:template name="rbrace-character">
     <xsl:text>\textbraceright{}</xsl:text>
 </xsl:template>
 
 <!-- Tilde -->
-<xsl:template match="tilde">
+<xsl:template name="tilde-character">
     <xsl:text>\textasciitilde{}</xsl:text>
 </xsl:template>
 
 <!-- Backslash -->
-<xsl:template match="backslash">
+<xsl:template name="backslash-character">
     <xsl:text>\textbackslash{}</xsl:text>
 </xsl:template>
 
@@ -6431,120 +6456,122 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 
 <!-- Asterisk -->
 <!-- Centered as a character, not an exponent -->
-<xsl:template match="asterisk">
+<xsl:template name="asterisk-character">
     <xsl:text>\textasteriskcentered{}</xsl:text>
 </xsl:template>
 
 <!-- Left Single Quote -->
-<xsl:template match="lsq">
+<xsl:template name="lsq-character">
     <xsl:text>`</xsl:text>
 </xsl:template>
 
 <!-- Right Single Quote -->
-<xsl:template match="rsq">
+<xsl:template name="rsq-character">
     <xsl:text>'</xsl:text>
 </xsl:template>
 
 <!-- Left (Double) Quote -->
-<xsl:template match="lq">
+<xsl:template name="lq-character">
     <xsl:text>``</xsl:text>
 </xsl:template>
 
 <!-- Right (Double) Quote -->
-<xsl:template match="rq">
+<xsl:template name="rq-character">
     <xsl:text>''</xsl:text>
 </xsl:template>
 
 <!-- Left Bracket -->
-<xsl:template match="lbracket">
+<xsl:template name="lbracket-character">
     <xsl:text>[</xsl:text>
 </xsl:template>
 
 <!-- Right Bracket -->
-<xsl:template match="rbracket">
+<xsl:template name="rbracket-character">
     <xsl:text>]</xsl:text>
 </xsl:template>
 
 <!-- Left Double Bracket -->
-<xsl:template match="ldblbracket">
+<xsl:template name="ldblbracket-character">
     <xsl:text>\textlbrackdbl{}</xsl:text>
 </xsl:template>
 
 <!-- Right Double Bracket -->
-<xsl:template match="rdblbracket">
+<xsl:template name="rdblbracket-character">
     <xsl:text>\textrbrackdbl{}</xsl:text>
 </xsl:template>
 
 <!-- Left Angle Bracket -->
-<xsl:template match="langle">
+<xsl:template name="langle-character">
     <xsl:text>\textlangle{}</xsl:text>
 </xsl:template>
 
 <!-- Right Angle Bracket -->
-<xsl:template match="rangle">
+<xsl:template name="rangle-character">
     <xsl:text>\textrangle{}</xsl:text>
 </xsl:template>
 
 <!-- Other Miscellaneous Symbols, Constructions -->
 
 <!-- Ellipsis (dots), for text, not math -->
-<xsl:template match="ellipsis">
+<xsl:template name="ellipsis-character">
     <xsl:text>\textellipsis{}</xsl:text>
 </xsl:template>
 
 <!-- Midpoint -->
 <!-- A centered dot used sometimes like a decorative dash -->
 <!-- http://tex.stackexchange.com/questions/19180/which-dot-character-to-use-in-which-context -->
-<xsl:template match="midpoint">
+<xsl:template name="midpoint-character">
     <xsl:text>\textperiodcentered{}</xsl:text>
 </xsl:template>
 
 <!-- Swung Dash -->
 <!-- A decorative dash, like a tilde, but bigger, and centered -->
 <!-- http://andrewmccarthy.ie/2014/11/06/swung-dash-in-latex/  -->
-<xsl:template match="swungdash">
+<xsl:template name="swungdash-character">
     <xsl:text>\swungdash{}</xsl:text>
 </xsl:template>
 <!-- Protect the version of the macro appearing in titles -->
+<!-- This is an override of the base *template*           -->
 <xsl:template match="title//swungdash">
-    <xsl:text>\protect\swungdash{}</xsl:text>
+    <xsl:text>\protect</xsl:text>
+    <xsl:call-template name="swungdash-character"/>
 </xsl:template>
 
 <!-- Per Mille -->
 <!-- Or, per thousand, like a percent sign -->
-<xsl:template match="permille">
+<xsl:template name="permille-character">
     <xsl:text>\textperthousand{}</xsl:text>
 </xsl:template>
 
 <!-- Pilcrow -->
 <!-- Often used to mark the start of a paragraph -->
-<xsl:template match="pilcrow">
+<xsl:template name="pilcrow-character">
     <xsl:text>\textpilcrow{}</xsl:text>
 </xsl:template>
 
 <!-- Section Mark -->
 <!-- The stylized double-S to indicate section numbers -->
-<xsl:template match="section-mark">
+<xsl:template name="section-mark-character">
     <xsl:text>\textsection{}</xsl:text>
 </xsl:template>
 
 <!-- Times -->
 <!-- A "multiplication sign" symbol for use in text -->
-<xsl:template match="times">
+<xsl:template name="times-character">
     <xsl:text>\texttimes{}</xsl:text>
 </xsl:template>
 
 <!-- Slash -->
 <!-- Forward slash, or virgule (see solidus)   -->
 <!-- This should allow a linebreak, not tested -->
-<xsl:template match="slash">
+<xsl:template name="slash-character">
     <xsl:text>\slash{}</xsl:text>
 </xsl:template>
 
 <!-- Solidus -->
 <!-- Fraction bar, not as steep as a forward slash -->
 <!-- This should not allow a linebreak, not tested -->
-<xsl:template match="solidus">
+<xsl:template name="solidus-character">
     <xsl:text>\textfractionsolidus{}</xsl:text>
 </xsl:template>
 
@@ -6559,7 +6586,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- text context use this empty element.  For example,    -->
 <!-- this is a character Markdown uses, so we want to      -->
 <!-- provide this safety valve.                            -->
-<xsl:template match="backtick">
+<xsl:template name="backtick-character">
     <xsl:text>\textasciigrave{}</xsl:text>
 </xsl:template>
 
