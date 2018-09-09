@@ -380,6 +380,12 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <xsl:text>\tcbuselibrary{xparse}&#xa;</xsl:text>
     <xsl:text>%% Hyperref should be here, but likes to be loaded late&#xa;</xsl:text>
     <xsl:text>%%&#xa;</xsl:text>
+
+    <!-- ADR - add colour definitions here -->
+    <xsl:text>%% ADR -- added this to get colour definitions into the .tex just after tcolorbox stuff.</xsl:text>
+    <xsl:call-template name="style-colour-definitions" />
+    <!-- DONE -->
+
     <xsl:text>%% Inline math delimiters, \(, \), need to be robust&#xa;</xsl:text>
     <xsl:text>%% 2016-01-31:  latexrelease.sty  supersedes  fixltx2e.sty&#xa;</xsl:text>
     <xsl:text>%% If  latexrelease.sty  exists, bugfix is in kernel&#xa;</xsl:text>
