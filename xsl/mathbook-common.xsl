@@ -3499,6 +3499,70 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
     </xsl:choose>
 </xsl:template>
 
+<!-- ##### -->
+<!-- Icons -->
+<!-- ##### -->
+
+<!-- Comments are Unicode names, from fileformat.info -->
+<!-- @latex takes priority for LaTeX output when the  -->
+<!-- Font Awesome name has changed, but the LaTeX     -->
+<!-- package is lagging.  This needs to be in the     -->
+<!-- Font Awesome style, with dashes and no CamelCase -->
+<xsl:variable name="icon-rtf">
+    <!-- see Unicode Character 'LEFTWARDS HEAVY ARROW' (U+1F844) -->
+    <!-- for bulkier arrows (in "Supplemental Arrows-C Block")   -->
+    <iconinfo name="arrow-left"
+              font-awesome="arrow-left"
+              unicode="&#x2190;"/> <!-- LEFTWARDS ARROW -->
+    <iconinfo name="arrow-up"
+              font-awesome="arrow-up"
+              unicode="&#x2191;"/> <!-- UPWARDS ARROW -->
+    <iconinfo name="arrow-right"
+              font-awesome="arrow-right"
+              unicode="&#x2192;"/> <!-- RIGHTWARDS ARROW -->
+    <iconinfo name="arrow-down"
+              font-awesome="arrow-down"
+              unicode="&#x2193;"/> <!-- DOWNWARDS ARROW -->
+    <iconinfo name="file-save"
+              font-awesome="save"
+              unicode="&#x1f4be;"/> <!-- FLOPPY DISK -->
+    <iconinfo name="gear"
+              font-awesome="cog"
+              unicode="&#x2699;" /> <!-- GEAR -->
+    <iconinfo name="menu"
+              latex="favicon"
+              font-awesome="bars"
+              unicode="&#x2630;" /> <!-- TRIGRAM FOR HEAVEN -->
+    <iconinfo name="wrench"
+              font-awesome="wrench"
+              unicode="&#x1f527;"/> <!-- WRENCH -->
+</xsl:variable>
+
+<!-- If read from a file via "document()" then   -->
+<!-- the exsl:node-set() call would seem to be   -->
+<!-- unnecessary.  When list above gets too big, -->
+<!-- migrate to a new file after consulting      -->
+<!-- localization scheme                         -->
+<xsl:variable name="icon-table" select="exsl:node-set($icon-rtf)"/>
+
+<xsl:key name="icon-key" match="iconinfo" use="@name"/>
+
+<!-- ##### -->
+<!-- Icons -->
+<!-- ##### -->
+
+<xsl:template match="icon">
+    <!-- the name attribute of the "icon" in text as a string -->
+    <xsl:variable name="icon-name">
+        <xsl:value-of select="@name"/>
+    </xsl:variable>
+
+    <!-- for-each is just one node, but sets context for key() -->
+    <xsl:for-each select="$icon-table">
+        <xsl:value-of select="key('icon-key', $icon-name)/@unicode" />
+    </xsl:for-each>
+</xsl:template>
+
 
 <!-- ########### -->
 <!-- Identifiers        -->
@@ -6349,7 +6413,7 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
 
 <!-- Note -->
 <xsl:template match="n">
-    <xsl:text>\(</xsl:text>
+    <xsl:call-template name="begin-inline-math"/>
     <!-- Test that pitch class is NOT castable as a number -->
     <xsl:if test="not(number(@pc) = number(@pc))">
         <xsl:text>\text{</xsl:text>
@@ -6382,20 +6446,36 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
         <xsl:value-of select="@octave"/>
         <xsl:text>}</xsl:text>
     </xsl:if>
-    <xsl:text>\)</xsl:text>
+    <xsl:call-template name="end-inline-math"/>
 </xsl:template>
 
 <!-- Scale Degrees -->
 <xsl:template match="scaledeg">
     <!-- Arabic numeral with circumflex accent above)-->
-    <xsl:text>\(\hat{</xsl:text>
+    <xsl:call-template name="begin-inline-math"/>
+    <xsl:text>\hat{</xsl:text>
     <xsl:apply-templates/>
-    <xsl:text>}\) </xsl:text>
+    <xsl:text>}</xsl:text>
+    <xsl:call-template name="end-inline-math"/>
+    <!-- TODO: unclear if trailing space is necessary -->
+    <xsl:text> </xsl:text>
+</xsl:template>
+
+<!-- Time Signatures -->
+<xsl:template match="timesignature">
+    <xsl:call-template name="begin-inline-math"/>
+    <xsl:text>\begin{smallmatrix}</xsl:text>
+    <xsl:value-of select="@top"/>
+    <xsl:text>\\</xsl:text>
+    <xsl:value-of select="@bottom"/>
+    <xsl:text>\end{smallmatrix}</xsl:text>
+    <xsl:call-template name="end-inline-math"/>
 </xsl:template>
 
 <!-- Chord -->
 <xsl:template match="chord">
-    <xsl:text>\(\left.</xsl:text>
+    <xsl:call-template name="begin-inline-math"/>
+    <xsl:text>\left.</xsl:text>
     <!-- Root -->
     <xsl:choose>
         <!-- There is an accidental -->
@@ -6529,7 +6609,8 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
             </xsl:otherwise>
         </xsl:choose>
     </xsl:if>
-    <xsl:text>\right.\)</xsl:text>
+    <xsl:text>\right.</xsl:text>
+    <xsl:call-template name="end-inline-math"/>
 </xsl:template>
 
 <!-- Chord Alteration -->
