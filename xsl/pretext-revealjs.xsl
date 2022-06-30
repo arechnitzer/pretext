@@ -103,6 +103,9 @@ along with PreTeXt.  If not, see <http://www.gnu.org/licenses/>.
 ul {
   display: block !important;
 }
+.sbsrow {
+  display: flex; !important;
+}
 .reveal img {
   border: 0.5px !important;
   border-radius: 2px 10px 2px;
@@ -447,18 +450,19 @@ dfn {
     <xsl:param name="layout" />
     <xsl:param name="panels" />
 
+    <!-- use margin=auto to centre the sidebyside -->
     <xsl:variable name="left-margin"  select="$layout/left-margin" />
     <xsl:variable name="right-margin" select="$layout/right-margin" />
 
-    <div style="display: table;">
+    <div class="sbsrow">
         <xsl:attribute name="style">
-            <xsl:text>display:table;</xsl:text>
-            <xsl:text>margin-left:</xsl:text>
-            <xsl:value-of select="$left-margin" />
-            <xsl:text>;</xsl:text>
-            <xsl:text>margin-right:</xsl:text>
-            <xsl:value-of select="$right-margin" />
-            <xsl:text>;</xsl:text>
+	  <xsl:text>margin-left:</xsl:text>
+          <xsl:value-of select="$left-margin" />
+          <xsl:text>;</xsl:text>
+          <xsl:text>margin-right:</xsl:text>
+          <xsl:value-of select="$right-margin" />
+          <xsl:text>;</xsl:text>
+
         </xsl:attribute>
         <xsl:copy-of select="$panels" />
     </div>
@@ -478,8 +482,7 @@ dfn {
           </xsl:attribute>
         </xsl:if>
         <xsl:attribute name="style">
-            <xsl:text>display:table-cell;</xsl:text>
-            <xsl:text>width:</xsl:text>
+            <xsl:text>flex:</xsl:text>
             <xsl:call-template name="relative-width">
                 <xsl:with-param name="width" select="$width" />
                 <xsl:with-param name="left-margin"  select="$left-margin" />
