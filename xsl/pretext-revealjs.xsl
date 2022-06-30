@@ -570,7 +570,14 @@ dfn {
 <xsl:template match="example|activity|note">
   <div class="activity">
     <h3>
-      <xsl:apply-templates select="." mode="type-name" /> (<xsl:value-of select="@source-number"/>):
+      <xsl:choose>
+	<xsl:when test="@source-number">
+	  <xsl:apply-templates select="." mode="type-name" /> (<xsl:value-of select="@source-number"/>):
+	</xsl:when>
+	<xsl:otherwise>
+	  <xsl:apply-templates select="." mode="type-name" />:
+	</xsl:otherwise>
+      </xsl:choose>      
       <xsl:apply-templates select="." mode="title-full" />
     </h3>
       <xsl:apply-templates />
@@ -583,7 +590,14 @@ dfn {
 <xsl:template match="fact">
   <div class="definition">
     <h3>
-      <xsl:apply-templates select="." mode="type-name" /> (<xsl:value-of select="@source-number"/>):
+      <xsl:choose>
+	<xsl:when test="@source-number">
+	  <xsl:apply-templates select="." mode="type-name" /> (<xsl:value-of select="@source-number"/>):
+	</xsl:when>
+	<xsl:otherwise>
+	  <xsl:apply-templates select="." mode="type-name" />:
+	</xsl:otherwise>
+      </xsl:choose>      
       <xsl:apply-templates select="." mode="title-full" />
     </h3>
       <xsl:apply-templates/>
